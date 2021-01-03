@@ -1,0 +1,82 @@
+#pragma METAINFO("luigi_ringfit", 1, 0, "JW")
+
+/***
+ * GPC script for Luigi's Mansion 3
+ * Author AttackOnJasper
+**/
+
+/***
+ * Ring Con axis system
+	* Origin - We use the center of the Ring Con as the origin of the axis
+	* ACCEL_2_X - Vertical distance of the Joy Con w.r.t. the center. Range: -25 ~ 25. Positive ACCEL_2_X means that the Joy Con is above the origin
+	* ACCEL_2_Y - Horizontal distance of the Joy Con w.r.t. the center. Range: -25 ~ 25. Positive ACCEL_2_Y means that the Joy Con is on the right side of the origin
+	* ACCEL_2_Z - If positive value - Ring Con has been flipped backwards. Range: -25 ~ 25
+ * Ring Con Acceleration
+    * SWITCH_GYROX - Centripetal acceleration against vertical axis; Positive - flip anticlockwise
+	* SWITCH_GYROY - Centripetal acceleration against horizontal axis; Positive - flip anticlockwise
+    * SWITCH_GYROZ - Centripetal acceleration against origin; Positive - Anticlockwise rotation
+**/
+#include <switch.gph>
+
+#define RING_CON_POS_MAX 25
+#define RING_CON_TRIGGER_THRESHOLD_LOW 10
+#define RING_CON_TRIGGER_THRESHOLD_HIGH 20
+
+#define LEG_CON_TRIGGER_THRESHOLD_LOW 5
+#define LEG_CON_TRIGGER_THRESHOLD_MEDIUM 15
+#define LEG_CON_TRIGGER_THRESHOLD_HIGH 20
+
+#define BUTTON_LOW 10
+#define BUTTON_MEDIUM 90
+#define BUTTON_MAX 100
+
+int runCheck;
+
+init
+{
+	runCheck = 0;
+}
+
+main {
+	int ringConVerticalPos = (int32)get_val(ACCEL_2_X);
+	int ringConHorizontalPos = (int32)get_val(ACCEL_2_Y);
+	int ringConFlipPos = (int32)get_val(ACCEL_2_Z);
+	
+	int legConHorizontalPos = (int32)get_val(SWITCH_ACCX);
+	int legConVerticalPos = (int32)get_val(SWITCH_ACCY);
+	int legConFlipPos = (int32)get_val(SWITCH_ACCZ);
+	
+	int verticalFlipAcc = (int32)get_val(SWITCH_GYROY);
+	int horizontalFlipAcc = (int32)get_val(SWITCH_GYROX);
+	int centripetalAcc = (int32)get_val(SWITCH_GYROZ);
+	
+	/*
+	// if running
+	if(abs(lengthBarFlipAcc) > 5)
+	{
+		runCheck = 300;	
+		set_val(SWITCH_B, BUTTON_MAX);
+		if (abs(ringConFlipPos) < abs(ringConHorizontalPos)) {
+			set_val(SWITCH_LX, ringConHorizontalPos > 0 ? BUTTON_MAX : -BUTTON_MAX);
+			set_val(SWITCH_LY, abs(ringConFlipPos) > RING_CON_TRIGGER_THRESHOLD_HIGH? ringConFlipPos * 4: 0);
+		} else {
+			set_val(SWITCH_LX, abs(ringConHorizontalPos) > RING_CON_TRIGGER_THRESHOLD_HIGH? ringConHorizontalPos * 4: 0);
+			set_val(SWITCH_LY, ringConFlipPos > 0 ? BUTTON_MAX : -BUTTON_MAX);
+		}
+	} else {
+		runCheck = min(runCheck - 1, 0);
+	}
+	
+	// Kick backwards to press ^ & open toolkit
+	if (legConFlipPos > LEG_CON_TRIGGER_THRESHOLD_MEDIUM) {
+		set_val(SWITCH_UP, 100);
+	}
+	
+	// squeeze Ring Con to press A
+ 	if (ringConVerticalPos > RING_CON_TRIGGER_THRESHOLD_HIGH && abs(ringConHorizontalPos) > RING_CON_TRIGGER_THRESHOLD_LOW && abs(centripetalAcc) < 1) {
+		set_val(SWITCH_A, BUTTON_MAX);
+	}
+	*/
+
+
+}

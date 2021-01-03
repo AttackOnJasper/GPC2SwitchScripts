@@ -1,0 +1,20 @@
+#pragma METAINFO("RingConFix", 1, 0, "JW")
+#include <switch.gph>
+
+/**
+JonCons' sticks movements may be broken: they might not be detected properly by the switch
+ This script would help the switch recognizes the movements by increasing the movements of the stick
+ */
+#define SIZE 4
+
+main {
+	uint8 buttons[SIZE] = {STICK_1_X, STICK_2_X, STICK_1_Y, STICK_2_Y};
+	int buttonIndex = 0;
+	for (; buttonIndex < SIZE; buttonIndex++) {
+		uint8 button = buttons[buttonIndex];
+		int buttonValue = (int32)get_val(button);
+		if (abs(buttonValue) > 15) {
+			set_val(button, buttonValue > 0 ? 90 : -90);
+		}
+	}
+}

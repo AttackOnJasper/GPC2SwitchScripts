@@ -1,0 +1,133 @@
+#pragma METAINFO("ac_new", 1, 0, "JW")
+
+/***
+ * GPC script for Animal Crossing: New Horizon
+ * Author AttackOnJasper
+**/
+
+#include <switch.gph>
+
+/***
+ * Ring Con axis system
+	* Origin - We use the center of the Ring Con as the origin of the axis
+	* ACCEL_2_X - Vertical distance of the Joy Con w.r.t. the center. Range: -25 ~ 25. Positive ACCEL_2_X means that the Joy Con is above the origin
+	* ACCEL_2_Y - Horizontal distance of the Joy Con w.r.t. the center. Range: -25 ~ 25. Positive ACCEL_2_Y means that the Joy Con is on the right side of the origin
+	* ACCEL_2_Z - If positive value - Ring Con has been flipped backwards. Range: -25 ~ 25
+ * Ring Con Acceleration
+    * SWITCH_GYROX - Centripetal acceleration against vertical axis; Positive - flip anticlockwise
+	* SWITCH_GYROY - Centripetal acceleration against horizontal axis; Positive - flip anticlockwise
+    * SWITCH_GYROZ - Centripetal acceleration against origin; Positive - Anticlockwise rotation
+**/
+#define RING_CON_NORMAL_POS_MAX 25
+#define RING_CON_TRIGGER_THRESHOLD_LOW 10
+#define RING_CON_TRIGGER_THRESHOLD_HIGH 20
+
+/***
+  * Leg Con (JoyCon) axis system
+  * Origin - we use the center of the Leg Con as the origin of the axis
+  * Leg Con Acceleration
+    * SWITCH_GYROX - Centripetal acceleration against horizontal axis; Positive - Raise the leg up
+	* SWITCH_GYROY - Centripetal acceleration against vertical axis; Positive - turn clockwise
+    * SWITCH_GYROZ - Centripetal acceleration against origin; Positive - Anticlockwise rotation
+*/
+#define LEG_CON_TRIGGER_THRESHOLD_LOW 5
+#define LEG_CON_TRIGGER_THRESHOLD_MEDIUM 10
+#define LEG_CON_TRIGGER_THRESHOLD_HIGH 20
+
+#define ACC_THRESHOLD_LOW 3
+#define ACC_THRESHOLD_HIGH 10
+
+#define BUTTON_LOW 10
+#define BUTTON_MEDIUM 90
+#define BUTTON_MAX 100
+
+
+int runCheck;
+int walkCheck;
+
+init
+{
+	runCheck = 0;
+	walkCheck = 0;
+}
+
+main {
+	int ringConVerticalPos = (int32)get_val(ACCEL_2_X);
+	int ringConHorizontalPos = (int32)get_val(ACCEL_2_Y);
+	int ringConFlipPos = (int32)get_val(ACCEL_2_Z);
+	
+	int legConXPos = (int32)get_val(SWITCH_ACCX);
+	int legConYPos = (int32)get_val(SWITCH_ACCY);
+	int legConZPos = (int32)get_val(SWITCH_ACCZ);
+	
+	int xAcc = (int32)get_val(SWITCH_GYROX);
+	int yAcc = (int32)get_val(SWITCH_GYROY);
+	int zAcc = (int32)get_val(SWITCH_GYROZ);
+	
+	// Changing standing stale direction only when RingCon is rotated or fliped
+	if (ringConVerticalPos < RING_CON_TRIGGER_THRESHOLD_HIGH) {
+		set_val(SWITCH_LX, abs(ringConHorizontalPos) > RING_CON_TRIGGER_THRESHOLD_LOW ? ringConHorizontalPos * 2 : 0);
+		set_val(SWITCH_LY, abs(ringConFlipPos) > RING_CON_TRIGGER_THRESHOLD_LOW ? ringConFlipPos * 2 : 0);
+	}
+	
+	// Check if running / walkinng by checking if leg con's Z position values have been changed
+	if (abs(legConZPos) > LEG_CON_TRIGGER_THRESHOLD_MEDIUM && (abs(legConYPos) < LEG_CON_TRIGGER_THRESHOLD_LOW || abs(legConYPos) > LEG_CON_TRIGGER_THRESHOLD_HIGH)) {
+		walkCheck = 300;
+		if (abs(legConZPos) > LEG_CON_TRIGGER_THRESHOLD_HIGH) {
+			runCheck = 300;
+		}
+	} else {
+		walkCheck--;
+		runCheck--;
+	}
+
+	// Upon walking
+	if (walkCheck > 0) {
+		// Upon running
+		if (runCheck > 0) {
+			set_val(SWITCH_B, BUTTON_MAX);
+		}
+		// Walking/Running direction
+		int newX = ringConHorizontalPos / 10 * 40; // modulate input to output
+		int newY = ringConFlipPos / 10 * 40;
+		if (abs(ringConHorizontalPos) - abs(ringConFlipPos) > 5) { // More horizontal movement
+			newX = ringConHorizontalPos > 0 ? BUTTON_MAX : -BUTTON_MAX;
+		} else if (abs(ringConFlipPos) - abs(ringConHorizontalPos) > 5) { // More vertical movement
+			newY = ringConFlipPos > 0 ? BUTTON_MAX : -BUTTON_MAX;
+		}
+		set_val(SWITCH_LX, newX);
+		set_val(SWITCH_LY, newY);
+	}
+	
+	// jump to open item bags i.e. press X
+	if (abs(legConYPos) > 40 && abs(legConZPos) > 40) {
+		clearButtons();
+		set_val(SWITCH_X, BUTTON_MAX);
+	} else if (abs(ringConHorizontalPos) < RING_CON_TRIGGER_THRESHOLD_LOW
+		&& abs(yAcc) < ACC_THRESHOLD_LOW
+		&& abs(zAcc) < ACC_THRESHOLD_LOW
+		&& abs(xAcc) > ACC_THRESHOLD_LOW) {
+		clearButtons();
+		if (ringConVerticalPos > RING_CON_NORMAL_POS_MAX) { // punch one hand to press A
+			set_val(SWITCH_A, BUTTON_MAX);
+		} else if (ringConHorizontalPos == 0
+			&& ringConVerticalPos == 0
+			&& abs(legConXPos) > LEG_CON_TRIGGER_THRESHOLD_LOW 
+			&& abs(legConYPos) > LEG_CON_TRIGGER_THRESHOLD_LOW
+			&& abs(legConZPos) > LEG_CON_TRIGGER_THRESHOLD_LOW) { // Place RingCon horizontally and squat to open phone i.e. press ZL
+			set_val(SWITCH_ZL, BUTTON_MAX);
+		}
+	}
+	
+	
+	// pull Ring Con to press Y
+}
+
+void clearButtons() 
+{
+    uint8 i = BUTTON_1;
+ 
+    for(; i<=BUTTON_21; ++i) {
+        set_val(i, 0.0);
+    }
+}
