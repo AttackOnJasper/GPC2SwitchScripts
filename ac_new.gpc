@@ -6,6 +6,7 @@
 **/
 
 #include <switch.gph>
+#include <remapper.gph>
 
 /***
  * Ring Con axis system
@@ -34,19 +35,38 @@
 #define LEG_CON_TRIGGER_THRESHOLD_MEDIUM 10
 #define LEG_CON_TRIGGER_THRESHOLD_HIGH 20
 
-#define ACC_THRESHOLD_LOW 3
-#define ACC_THRESHOLD_HIGH 10
+#define ACC_THRESHOLD_LOW 10
+#define ACC_THRESHOLD_HIGH 20
 
 #define BUTTON_LOW 10
 #define BUTTON_MEDIUM 90
 #define BUTTON_MAX 100
 
+/***
+ * Remapping of right joy-con values to map GYRO_1_X, GYRO_1_Y, GYRO_1_Z to PADDLE_1,  PADDLE_2,  PADDLE_3
+ * The values are re-mapped because both left and right joy cons contribute to GYRO_1_X, GYRO_1_Y, GYRO_1_Z values
+ * After remapping, left joy-con's GYRO values would be in GYRO_1_X, GYRO_1_Y, GYRO_1_Z, while right joy-con's GYRO values
+ * would be in PADDLE_1,  PADDLE_2,  PADDLE_3.
+ */
+const uint8 rightJoyConLayout[43] = {
+    RMP_BT_A,
+    BUTTON_1,  BUTTON_2,  BUTTON_3,  BUTTON_4, BUTTON_5, BUTTON_6,  BUTTON_7, 
+    BUTTON_8,  BUTTON_9,  BUTTON_10, BUTTON_11, BUTTON_12, BUTTON_13, BUTTON_14, 
+	BUTTON_15, BUTTON_16, BUTTON_17,  BUTTON_18, BUTTON_19, BUTTON_20, BUTTON_21, 
+    STICK_1_X, STICK_1_Y, STICK_2_X, STICK_2_Y, 
+    POINT_1_X, POINT_1_Y, POINT_2_X, POINT_2_Y, 
+    ACCEL_1_X, ACCEL_1_Y, ACCEL_1_Z, ACCEL_2_X, ACCEL_2_Y, ACCEL_2_Z,
+    PADDLE_1,  PADDLE_2,  PADDLE_3, GYRO_1_X, GYRO_1_Y, GYRO_1_Z, PADDLE_4
+};
 
 int runCheck;
 int walkCheck;
 
+// Need to connect right joy con first.
 init
 {
+	remapper(rightJoyConLayout);
+	pmem_load(); // Load permanent memory before use any pmem operation
 	runCheck = 0;
 	walkCheck = 0;
 }
@@ -59,10 +79,14 @@ main {
 	int legConXPos = (int32)get_val(SWITCH_ACCX);
 	int legConYPos = (int32)get_val(SWITCH_ACCY);
 	int legConZPos = (int32)get_val(SWITCH_ACCZ);
+
+	int ringConXAcc = (int32)get_val(PADDLE_1);
+	int ringConYAcc = (int32)get_val(PADDLE_2);
+	int ringConZAcc = (int32)get_val(PADDLE_3);
 	
-	int xAcc = (int32)get_val(SWITCH_GYROX);
-	int yAcc = (int32)get_val(SWITCH_GYROY);
-	int zAcc = (int32)get_val(SWITCH_GYROZ);
+	int legXAcc = (int32)get_val(SWITCH_GYROX);
+	int legYAcc = (int32)get_val(SWITCH_GYROY);
+	int legZAcc = (int32)get_val(SWITCH_GYROZ);
 	
 	// Changing standing stale direction only when RingCon is rotated or fliped
 	if (ringConVerticalPos < RING_CON_TRIGGER_THRESHOLD_HIGH) {
@@ -70,15 +94,25 @@ main {
 		set_val(SWITCH_LY, abs(ringConFlipPos) > RING_CON_TRIGGER_THRESHOLD_LOW ? ringConFlipPos * 2 : 0);
 	}
 	
-	// Check if running / walkinng by checking if leg con's Z position values have been changed
-	if (abs(legConZPos) > LEG_CON_TRIGGER_THRESHOLD_MEDIUM && (abs(legConYPos) < LEG_CON_TRIGGER_THRESHOLD_LOW || abs(legConYPos) > LEG_CON_TRIGGER_THRESHOLD_HIGH)) {
+	// Check if running / walkinng by checking the duration of leg con acceleration. 
+	// Typically during running the high acceleration would persist for 5 main function refreshes
+	int8 highAccDuration = pmem_read(SWITCH_GYROX);
+	if (highAccDuration >= 5) {
+		runCheck = 200;
+	} else {
+		runCheck--;
+	}
+	if (abs(legXAcc) > ACC_THRESHOLD_LOW) {
 		walkCheck = 300;
-		if (abs(legConZPos) > LEG_CON_TRIGGER_THRESHOLD_HIGH) {
-			runCheck = 300;
+		if (abs(legConZPos) > ACC_THRESHOLD_HIGH) {
+			printf("%d", highAccDuration);
+			pmem_write(SWITCH_GYROX, highAccDuration + 1);
+		} else {
+			pmem_write(SWITCH_GYROX, 0);
 		}
+		pmem_save(); 
 	} else {
 		walkCheck--;
-		runCheck--;
 	}
 
 	// Upon walking
@@ -99,14 +133,15 @@ main {
 		set_val(SWITCH_LY, newY);
 	}
 	
+	/**
 	// jump to open item bags i.e. press X
 	if (abs(legConYPos) > 40 && abs(legConZPos) > 40) {
 		clearButtons();
 		set_val(SWITCH_X, BUTTON_MAX);
 	} else if (abs(ringConHorizontalPos) < RING_CON_TRIGGER_THRESHOLD_LOW
-		&& abs(yAcc) < ACC_THRESHOLD_LOW
-		&& abs(zAcc) < ACC_THRESHOLD_LOW
-		&& abs(xAcc) > ACC_THRESHOLD_LOW) {
+		&& abs(legYAcc) < ACC_THRESHOLD_LOW
+		&& abs(legZAcc) < ACC_THRESHOLD_LOW
+		&& abs(legXAcc) > ACC_THRESHOLD_LOW) {
 		clearButtons();
 		if (ringConVerticalPos > RING_CON_NORMAL_POS_MAX) { // punch one hand to press A
 			set_val(SWITCH_A, BUTTON_MAX);
@@ -118,6 +153,7 @@ main {
 			set_val(SWITCH_ZL, BUTTON_MAX);
 		}
 	}
+	*/
 	
 	
 	// pull Ring Con to press Y
