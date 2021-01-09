@@ -10,7 +10,7 @@
 * Why bother?
 	* In switch, both left and right joy cons contribute to GYRO values. It's hard to distingush which one contributes to the GYRO value, so disabling one's GYRO values would reduce noise significantly.
 
-## GTuner RingCon References
+## GTuner References
 ### JoyCon wireless pairing
    1. `Device Configuration` panel -> Wireless Pairing
    1. Press and hold the power button on the JoyCon until the light is flashing
@@ -21,5 +21,14 @@
 
 ### Remapper
 * Configure controller mapping
+
+### Persistent Memory
+* Usage
+* init()
+	* pmem_load();
+	* pmem_read(index, &var);
+* main
+	* pmem_write(index, var);
+	* pmem_save();
 
 ## Note
