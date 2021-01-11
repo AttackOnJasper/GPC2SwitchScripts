@@ -36,6 +36,7 @@
 #define LEG_CON_TRIGGER_THRESHOLD_LOW 5
 #define LEG_CON_TRIGGER_THRESHOLD_MEDIUM 10
 #define LEG_CON_TRIGGER_THRESHOLD_HIGH 20
+#define LEG_CON_TRIGGER_THRESHOLD_MAX 25
 
 #define ACC_THRESHOLD_LOW 3
 #define ACC_THRESHOLD_MEDIUM 10
@@ -55,17 +56,28 @@
  */
 combo pressA {
   set_val(SWITCH_A,100); // press A
-  wait(50);              // (press) for 50ms
+  wait(100);              // (press) for 100ms
 }
 
 combo pressB {
   set_val(SWITCH_B,100); // press B
-  wait(50);              // (press) for 50ms
+  wait(100);              // (press) for 100ms
+  wait(50);
+}
+
+combo pressY {
+  set_val(SWITCH_Y,100); // press Y
+  wait(100);              // (press) for 100ms
 }
 
 combo pressX {
   set_val(SWITCH_X,100); // press X
-  wait(50);              // (press) for 50ms
+  wait(100);              // (press) for 100ms
+}
+
+combo pressZL {
+  set_val(SWITCH_ZL,100); // press X
+  wait(100);              // (press) for 100ms
 }
 
 /***
@@ -91,10 +103,16 @@ uint8 highLegXAccDuration;
 uint8 mediumLegXAccDuration;
 uint8 ringConXPositiveAccDuration;
 uint8 ringConXNegativeAccDuration;
+uint8 ringConYAccDuration;
+uint8 legConXNegativePosDuration;
+uint8 legConZPositivePosDuration;
+uint8 yButtonDuration;
+
 fix32 directionDegree;
 
 bool isBagOpen;
-bool isBagItemSelected;
+bool isPhoneOpen;
+int menuLayer;
 
 // Need to connect right joy con first.
 init
@@ -109,8 +127,14 @@ init
 	mediumLegXAccDuration = 0;
 	ringConXPositiveAccDuration = 0;
 	ringConXNegativeAccDuration = 0;
+	ringConYAccDuration = 0;
+	legConXNegativePosDuration = 0;
+	legConZPositivePosDuration = 0;
+	yButtonDuration = 0;
+	
 	isBagOpen = FALSE;
-	isBagItemSelected = FALSE;
+	isPhoneOpen = FALSE;
+	menuLayer = 0;
 }
 
 main {
@@ -144,14 +168,16 @@ void executeMapping() {
 	int legYAcc = (int32)get_val(SWITCH_GYROY);
 	int legZAcc = (int32)get_val(SWITCH_GYROZ);
 	
-	// Press X by spinning body with Ring Con
+	// Press X by spinning body with Ring Con from right to left
 	if (ringConXAcc > ACC_THRESHOLD_MEDIUM && ringConVerticalPos > RING_CON_TRIGGER_THRESHOLD_HIGH) {
 		ringConXPositiveAccDuration++;
-		if (ringConXPositiveAccDuration >= 30) {
+		if (ringConXPositiveAccDuration >= 40 && !isBagOpen) {
 			ringConXPositiveAccDuration = 0;
 			printf("Opening the bag.");
+			clearButtons();
 			combo_run(pressX);
 			isBagOpen = TRUE;
+			menuLayer = 0;
 			return;
 		}
 	} else {
@@ -161,11 +187,17 @@ void executeMapping() {
 	if (isBagOpen) {
 		if (ringConXAcc < -ACC_THRESHOLD_MEDIUM && ringConVerticalPos > RING_CON_TRIGGER_THRESHOLD_HIGH) {
 			ringConXNegativeAccDuration++;
-			if (ringConXNegativeAccDuration >= 30) {
+			if (ringConXNegativeAccDuration >= 40) {
 				ringConXNegativeAccDuration = 0;
-				printf("Closing the bag.");
+				printf("Menu Layer: %d", menuLayer);
+				if (menuLayer == 0) {
+					printf("Closing the bag.");
+					isBagOpen = FALSE;
+				} else {
+					menuLayer = max(0, menuLayer - 1);
+				}
+				clearButtons();
 				combo_run(pressB);
-				isBagOpen = FALSE;
 				return;
 			}
 		} else {
@@ -181,53 +213,86 @@ void executeMapping() {
 			} 
 			if (absLegConXPos > ACC_THRESHOLD_MEDIUM) {
 				combo_run(pressA);
-				isBagOpen = FALSE;
-				isBagItemSelected = TRUE;
+				menuLayer = 1;
 				return;
 			}
 		}
 		return;
 	}
 	
-	if (isBagItemSelected) {
-		if (ringConXAcc < -ACC_THRESHOLD_MEDIUM && ringConVerticalPos > RING_CON_TRIGGER_THRESHOLD_MEDIUM) {
-			ringConXNegativeAccDuration++;
-			if (ringConXNegativeAccDuration >= 5) {
-				ringConXNegativeAccDuration = 0;
+	// Press ZL by raise leg up
+	if (legConZPos == -LEG_CON_TRIGGER_THRESHOLD_MAX && legConYPos > -10) {
+		legConZPositivePosDuration++;
+		if (legConZPositivePosDuration > 10 && !isPhoneOpen) {
+			legConZPositivePosDuration = 0;
+			printf("Opening the phone.");
+			clearButtons();
+			combo_run(pressZL);
+			isPhoneOpen = TRUE;
+			menuLayer = 0;
+		}
+		return;
+	} else {
+		legConZPositivePosDuration = 0;
+	}
+	
+	if (isPhoneOpen) {
+		// Side kick to close the phone
+		if (legConXPos < -LEG_CON_TRIGGER_THRESHOLD_MEDIUM) {
+			legConXNegativePosDuration++;
+			if (legConXNegativePosDuration > 10) {
+				legConXNegativePosDuration = 0;
+				clearButtons();
 				combo_run(pressB);
-				isBagItemSelected = FALSE;
-				isBagOpen = TRUE;
+				if (menuLayer == 0) {
+					printf("Closing the phone.");
+					isPhoneOpen = FALSE;
+				} else {
+					menuLayer = max(0, menuLayer - 1);
+				}
 				return;
 			}
 		} else {
-			ringConXNegativeAccDuration = 0; 
+			legConXNegativePosDuration = 0;
+			// navigate through the phone
+			if (absRingConHorizontalPos > RING_CON_TRIGGER_THRESHOLD_MEDIUM) {
+				set_val(SWITCH_LX, ringConHorizontalPos > 0.0 ? BUTTON_MEDIUM : -BUTTON_MEDIUM);
+				return;
+			} 
 			if (absRingConFlipPos > RING_CON_TRIGGER_THRESHOLD_MEDIUM) {
 				set_val(SWITCH_LY, ringConFlipPos > 0.0 ? BUTTON_MEDIUM : -BUTTON_MEDIUM);
 				return;
 			} 
 			if (absLegConXPos > ACC_THRESHOLD_MEDIUM) {
 				combo_run(pressA);
-				isBagOpen = FALSE;
+				menuLayer++;
 				return;
 			}
 		}
 		return;
 	}
 	
+	// Reset to prevent unexpected values
+	isBagOpen = FALSE;
+	isPhoneOpen = FALSE;
+	
 	// Press Y by squating and placing ring con parallel to the ground
-	if (absRingConVerticalPos < RING_CON_TRIGGER_THRESHOLD_LOW
-		&& absRingConHorizontalPos < RING_CON_TRIGGER_THRESHOLD_LOW
-		&& absRingConFlipPos >= RING_CON_TRIGGER_THRESHOLD_MAX
-		&& (abs(legXAcc) > ACC_THRESHOLD_MEDIUM || legConZPos < -LEG_CON_TRIGGER_THRESHOLD_MEDIUM)) {
-		clearButtons();
-		set_val(SWITCH_Y, BUTTON_MAX);
+	if (absRingConFlipPos > RING_CON_TRIGGER_THRESHOLD_MAX
+		&& legXAcc > ACC_THRESHOLD_MEDIUM) {
+		yButtonDuration++;
+		if (yButtonDuration >= 10) {
+			clearButtons();
+			combo_run(pressY);
+		}
 		return;
+	} else {
+		yButtonDuration = 0;
 	}
 
 	// Check if running / walkinng by checking the duration of leg con acceleration. 
 	// Typically during running the high acceleration would persist for 5 main function refreshes
 	if (abs(legXAcc) > ACC_THRESHOLD_MEDIUM) {
-		walkCheck = 300;
+		walkCheck = 100;
 		pmem_write(WALK_CHECK_INDEX, walkCheck);
 		pmem_save();
 		if (abs(legXAcc) > ACC_THRESHOLD_HIGH) {
@@ -245,7 +310,7 @@ void executeMapping() {
 		walkCheck = max(0, walkCheck - 1);
 	}
 	if (highLegXAccDuration >= 10) {
-		runCheck = 200;
+		runCheck = 300;
 	} else {
 		runCheck--;
 	}
@@ -259,7 +324,7 @@ void executeMapping() {
 		}
 		
 		fix32 newX = ringConHorizontalPos * 4.0; // x direction ratio
-		fix32 newY = ringConFlipPos * 4.0; // y direction ratio
+		fix32 newY = min(ringConFlipPos * 5.0, BUTTON_MAX); // y direction ratio
 		
 		// Walking/Running direction
 		if (abs(ringConHorizontalPos) - abs(ringConFlipPos) > 5.0 || abs(newX) > 100.0) { // More horizontal movement
@@ -274,8 +339,8 @@ void executeMapping() {
 	
 	// Changing standing stale direction only when RingCon is rotated
 	// If rotating RingCon -> start updating direction.
-	if (ringConVerticalPos < RING_CON_TRIGGER_THRESHOLD_LOW
-		&& ringConFlipPos < RING_CON_TRIGGER_THRESHOLD_LOW) {
+	if (absRingConVerticalPos < RING_CON_TRIGGER_THRESHOLD_LOW
+		&& absRingConFlipPos < RING_CON_TRIGGER_THRESHOLD_LOW) {
 		// Update direction degree
 		if (abs(ringConHorizontalPos) > RING_CON_TRIGGER_THRESHOLD_HIGH) {
 			directionDegree += ringConHorizontalPos > 0.0 ? -DEGREE_RATE_HIGH : DEGREE_RATE_HIGH;
@@ -293,8 +358,13 @@ void executeMapping() {
 	if (absRingConYAcc > ACC_THRESHOLD_MEDIUM
 		&& absRingConXAcc < ACC_THRESHOLD_LOW
 		&& absRingConZAcc < ACC_THRESHOLD_LOW) {
+		ringConYAccDuration++;
+	} else {
+		ringConYAccDuration = 0;
+	}	
+	if (ringConYAccDuration >= 10) {
 		clearButtons();
-		set_val(SWITCH_A, BUTTON_MAX);
+		combo_run(pressA);
 		return;
 	}
 }
