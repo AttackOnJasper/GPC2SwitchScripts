@@ -23,6 +23,7 @@
 #define RING_CON_TRIGGER_THRESHOLD_LOW 5.0
 #define RING_CON_TRIGGER_THRESHOLD_MEDIUM 10.0
 #define RING_CON_TRIGGER_THRESHOLD_HIGH 20.0
+#define RING_CON_TRIGGER_THRESHOLD_MAX 25.0
 
 /***
   * Leg Con (JoyCon) axis system
@@ -44,7 +45,28 @@
 #define BUTTON_MEDIUM 90
 #define BUTTON_MAX 100.0
 
+#define DEGREE_RATE_HIGH 0.2
+#define DEGREE_RATE_LOW 0.1
+
 #define WALK_CHECK_INDEX 1
+
+/***
+ *
+ */
+combo pressA {
+  set_val(SWITCH_A,100); // press A
+  wait(50);              // (press) for 50ms
+}
+
+combo pressB {
+  set_val(SWITCH_B,100); // press B
+  wait(50);              // (press) for 50ms
+}
+
+combo pressX {
+  set_val(SWITCH_X,100); // press X
+  wait(50);              // (press) for 50ms
+}
 
 /***
  * Remapping of right joy-con values to map GYRO_1_X, GYRO_1_Y, GYRO_1_Z to PADDLE_1,  PADDLE_2,  PADDLE_3
@@ -63,9 +85,16 @@ const uint8 rightJoyConLayout[43] = {
     PADDLE_1,  PADDLE_2,  PADDLE_3, GYRO_1_X, GYRO_1_Y, GYRO_1_Z, PADDLE_4
 };
 
-int runCheck;
-int walkCheck;
+uint8 runCheck;
+uint8 walkCheck;
 uint8 highLegXAccDuration;
+uint8 mediumLegXAccDuration;
+uint8 ringConXPositiveAccDuration;
+uint8 ringConXNegativeAccDuration;
+fix32 directionDegree;
+
+bool isBagOpen;
+bool isBagItemSelected;
 
 // Need to connect right joy con first.
 init
@@ -74,8 +103,14 @@ init
 	runCheck = 0;
 	pmem_load();
 	pmem_read(WALK_CHECK_INDEX, &walkCheck); // save in pmem to prevent random mutation
+	directionDegree = 180.0;
 	walkCheck = 0;
 	highLegXAccDuration = 0;
+	mediumLegXAccDuration = 0;
+	ringConXPositiveAccDuration = 0;
+	ringConXNegativeAccDuration = 0;
+	isBagOpen = FALSE;
+	isBagItemSelected = FALSE;
 }
 
 main {
@@ -87,41 +122,111 @@ void executeMapping() {
 	fix32 ringConHorizontalPos = get_val(ACCEL_2_Y);
 	fix32 ringConFlipPos = get_val(ACCEL_2_Z);
 	
+	fix32 absRingConVerticalPos = abs(ringConVerticalPos);
+	fix32 absRingConHorizontalPos = abs(ringConHorizontalPos);
+	fix32 absRingConFlipPos = abs(ringConFlipPos);
+	
 	int legConXPos = (int32)get_val(SWITCH_ACCX);
 	int legConYPos = (int32)get_val(SWITCH_ACCY);
 	int legConZPos = (int32)get_val(SWITCH_ACCZ);
+	
+	int absLegConXPos = abs(legConXPos);
 
 	int ringConXAcc = (int32)get_val(PADDLE_1);
 	int ringConYAcc = (int32)get_val(PADDLE_2);
 	int ringConZAcc = (int32)get_val(PADDLE_3);
 	
+	int absRingConXAcc = abs(ringConXAcc);
+	int absRingConYAcc = abs(ringConYAcc);
+	int absRingConZAcc = abs(ringConZAcc);
+	
 	int legXAcc = (int32)get_val(SWITCH_GYROX);
 	int legYAcc = (int32)get_val(SWITCH_GYROY);
 	int legZAcc = (int32)get_val(SWITCH_GYROZ);
 	
-	// Press A
-	if (ringConYAcc > ACC_THRESHOLD_HIGH
-		&& abs(ringConXAcc) < ACC_THRESHOLD_LOW
-		&& abs(ringConZAcc) < ACC_THRESHOLD_LOW) {
-		clearButtons();
-		set_val(SWITCH_A, BUTTON_MAX);
+	// Press X by spinning body with Ring Con
+	if (ringConXAcc > ACC_THRESHOLD_MEDIUM && ringConVerticalPos > RING_CON_TRIGGER_THRESHOLD_HIGH) {
+		ringConXPositiveAccDuration++;
+		if (ringConXPositiveAccDuration >= 30) {
+			ringConXPositiveAccDuration = 0;
+			printf("Opening the bag.");
+			combo_run(pressX);
+			isBagOpen = TRUE;
+			return;
+		}
+	} else {
+		ringConXPositiveAccDuration = 0;
+	}
+	
+	if (isBagOpen) {
+		if (ringConXAcc < -ACC_THRESHOLD_MEDIUM && ringConVerticalPos > RING_CON_TRIGGER_THRESHOLD_HIGH) {
+			ringConXNegativeAccDuration++;
+			if (ringConXNegativeAccDuration >= 30) {
+				ringConXNegativeAccDuration = 0;
+				printf("Closing the bag.");
+				combo_run(pressB);
+				isBagOpen = FALSE;
+				return;
+			}
+		} else {
+			ringConXNegativeAccDuration = 0;
+			// navigate through the bag
+			if (absRingConHorizontalPos > RING_CON_TRIGGER_THRESHOLD_MEDIUM) {
+				set_val(SWITCH_LX, ringConHorizontalPos > 0.0 ? BUTTON_MEDIUM : -BUTTON_MEDIUM);
+				return;
+			} 
+			if (absRingConFlipPos > RING_CON_TRIGGER_THRESHOLD_MEDIUM) {
+				set_val(SWITCH_LY, ringConFlipPos > 0.0 ? BUTTON_MEDIUM : -BUTTON_MEDIUM);
+				return;
+			} 
+			if (absLegConXPos > ACC_THRESHOLD_MEDIUM) {
+				combo_run(pressA);
+				isBagOpen = FALSE;
+				isBagItemSelected = TRUE;
+				return;
+			}
+		}
 		return;
 	}
 	
-	// Changing standing stale direction only when RingCon is rotated or fliped
-	if (ringConVerticalPos < RING_CON_TRIGGER_THRESHOLD_HIGH) {
-		set_val(SWITCH_LX, abs(ringConHorizontalPos) > RING_CON_TRIGGER_THRESHOLD_LOW ? ringConHorizontalPos : 0.0);
-		set_val(SWITCH_LY, abs(ringConFlipPos) > RING_CON_TRIGGER_THRESHOLD_LOW ? ringConFlipPos : 0.0);
+	if (isBagItemSelected) {
+		if (ringConXAcc < -ACC_THRESHOLD_MEDIUM && ringConVerticalPos > RING_CON_TRIGGER_THRESHOLD_MEDIUM) {
+			ringConXNegativeAccDuration++;
+			if (ringConXNegativeAccDuration >= 5) {
+				ringConXNegativeAccDuration = 0;
+				combo_run(pressB);
+				isBagItemSelected = FALSE;
+				isBagOpen = TRUE;
+				return;
+			}
+		} else {
+			ringConXNegativeAccDuration = 0; 
+			if (absRingConFlipPos > RING_CON_TRIGGER_THRESHOLD_MEDIUM) {
+				set_val(SWITCH_LY, ringConFlipPos > 0.0 ? BUTTON_MEDIUM : -BUTTON_MEDIUM);
+				return;
+			} 
+			if (absLegConXPos > ACC_THRESHOLD_MEDIUM) {
+				combo_run(pressA);
+				isBagOpen = FALSE;
+				return;
+			}
+		}
+		return;
 	}
 	
+	// Press Y by squating and placing ring con parallel to the ground
+	if (absRingConVerticalPos < RING_CON_TRIGGER_THRESHOLD_LOW
+		&& absRingConHorizontalPos < RING_CON_TRIGGER_THRESHOLD_LOW
+		&& absRingConFlipPos >= RING_CON_TRIGGER_THRESHOLD_MAX
+		&& (abs(legXAcc) > ACC_THRESHOLD_MEDIUM || legConZPos < -LEG_CON_TRIGGER_THRESHOLD_MEDIUM)) {
+		clearButtons();
+		set_val(SWITCH_Y, BUTTON_MAX);
+		return;
+	}
+
 	// Check if running / walkinng by checking the duration of leg con acceleration. 
 	// Typically during running the high acceleration would persist for 5 main function refreshes
-	if (highLegXAccDuration >= 10) {
-		runCheck = 200;
-	} else {
-		runCheck--;
-	}
-	if (abs(legXAcc) > ACC_THRESHOLD_LOW) {
+	if (abs(legXAcc) > ACC_THRESHOLD_MEDIUM) {
 		walkCheck = 300;
 		pmem_write(WALK_CHECK_INDEX, walkCheck);
 		pmem_save();
@@ -139,13 +244,17 @@ void executeMapping() {
 		}
 		walkCheck = max(0, walkCheck - 1);
 	}
+	if (highLegXAccDuration >= 10) {
+		runCheck = 200;
+	} else {
+		runCheck--;
+	}
 
 	// Upon walking
 	if (walkCheck > 0) {
 		
 		// Upon running
 		if (runCheck > 0) {
-			printf("Starts running.");
 			set_val(SWITCH_B, BUTTON_MAX);
 		}
 		
@@ -160,6 +269,33 @@ void executeMapping() {
 		}
 		set_val(SWITCH_LX, newX);
 		set_val(SWITCH_LY, newY);
+		return;
+	}
+	
+	// Changing standing stale direction only when RingCon is rotated
+	// If rotating RingCon -> start updating direction.
+	if (ringConVerticalPos < RING_CON_TRIGGER_THRESHOLD_LOW
+		&& ringConFlipPos < RING_CON_TRIGGER_THRESHOLD_LOW) {
+		// Update direction degree
+		if (abs(ringConHorizontalPos) > RING_CON_TRIGGER_THRESHOLD_HIGH) {
+			directionDegree += ringConHorizontalPos > 0.0 ? -DEGREE_RATE_HIGH : DEGREE_RATE_HIGH;
+		} else if (abs(ringConHorizontalPos) > RING_CON_TRIGGER_THRESHOLD_MEDIUM) {
+			directionDegree += ringConHorizontalPos > 0.0 ? -DEGREE_RATE_LOW : DEGREE_RATE_LOW;
+		}
+		
+		// Calculate stick values, 
+		set_val(SWITCH_LX, -sin(deg2rad(directionDegree)) * 10.0);
+		set_val(SWITCH_LY, -cos(deg2rad(directionDegree)) * 10.0);
+		return;
+	}
+	
+	// Press A
+	if (absRingConYAcc > ACC_THRESHOLD_MEDIUM
+		&& absRingConXAcc < ACC_THRESHOLD_LOW
+		&& absRingConZAcc < ACC_THRESHOLD_LOW) {
+		clearButtons();
+		set_val(SWITCH_A, BUTTON_MAX);
+		return;
 	}
 }
 
