@@ -1,8 +1,15 @@
-#pragma METAINFO("ac_new", 1, 0, "JW")
+#pragma METAINFO("ac_new", 1, 0, "AttackOnJasper")
 
 /***
- * GPC script for Animal Crossing: New Horizon
+ * GPC script for connecting RingCon to Animal Crossing: New Horizon
  * Author AttackOnJasper
+ * 
+ * THIS PROGRAM IS LICENSED UNDER GPL
+ * Copyright (c) 2021 AttackOnJasper
+ * https://github.com/AttackOnJasper/GPC2SwitchScripts
+ *
+ * Disclaimer: Please credit @AttackOnJasper for any online posts. I spent several days to learn GPC and implement this script
+ * 转载请尊重作者的劳动成果并标明出处，谢谢！
 **/
 
 #include <switch.gph>
@@ -52,7 +59,7 @@
 #define WALK_CHECK_INDEX 1
 
 /***
- *
+ * Macros
  */
 combo PressA {
   set_val(SWITCH_A,100); // Press A
